@@ -1,0 +1,15 @@
+{
+  "name": "agentic-ai",
+  "version": "1.0.0",
+  "description": "Agentic AI Multi-Agent & Chat Workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node start.js",
+    "start": "node start.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
+

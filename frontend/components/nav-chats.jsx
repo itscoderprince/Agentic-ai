@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -44,9 +43,10 @@ export function NavChats({
       )}
       <SidebarMenu className="gap-1">
         {chats.map((chat) => {
-          const isActive = activeId ? chat.id === activeId : chat.isActive;
+          const chatId = chat.id || chat._id;
+          const isActive = activeId ? (activeId === chatId) : chat.isActive;
           return (
-            <SidebarMenuItem key={chat.id}>
+            <SidebarMenuItem key={chatId}>
               <SidebarMenuButton
                 isActive={isActive}
                 tooltip={chat.title}
@@ -73,4 +73,3 @@ export function NavChats({
 }
 
 export default NavChats;
-

@@ -1,4 +1,3 @@
-import * as React from "react"
 import { createHighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript"
 

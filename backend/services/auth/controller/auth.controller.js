@@ -12,13 +12,8 @@ const SESSION_EXPIRY = Number(process.env.SESSION_EXPIRY) || 604800000;
 
 // Login func
 export const login = AsyncHandler(async (req, res) => {
-  const token = req.body?.token;
-
-  if (typeof token !== "string" || !token.trim()) {
-    throw new AppError("Firebase ID token is required", 400);
-  }
-
-  const decoded = await auth.verifyIdToken(token.trim());
+  const { token } = req.validated;
+  const decoded = await auth.verifyIdToken(token);
 
   // 2. Find user in MongoDB
   let user = await User.findOne({

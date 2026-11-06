@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import { NavChats } from "@/components/nav-chats";
 import { NavUser } from "@/components/nav-user";
 import { Button } from "@/components/ui/button";
@@ -10,15 +9,11 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarTrigger,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { useChatStore } from "@/store/useChatStore";
 import { BotIcon, Search, PlusCircle } from "lucide-react";
 
 export function AppSidebar({ ...props }) {
-  const { open, isMobile, openMobile } = useSidebar();
-  const isOpen = isMobile ? openMobile : open;
-
   const chats = useChatStore((s) => s.chats);
   const activeId = useChatStore((s) => s.activeId);
   const selectChat = useChatStore((s) => s.selectChat);

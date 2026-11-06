@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -135,6 +136,12 @@ function ChatHeader() {
 }
 
 export default function Page() {
+  const fetchChats = useChatStore((s) => s.fetchChats);
+
+  useEffect(() => {
+    fetchChats();
+  }, [fetchChats]);
+
   return (
     <SidebarProvider>
       <AppSidebar />

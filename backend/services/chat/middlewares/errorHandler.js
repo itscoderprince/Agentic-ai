@@ -13,17 +13,6 @@ const errorHandler = (err, req, res, next) => {
         ? Object.assign(new Error(err.message ?? "Unknown error"), err)
         : new Error(String(err));
 
-  const firebaseAuthErrors = {
-    "auth/argument-error": "Invalid Firebase ID token. Please sign in again.",
-    "auth/id-token-expired": "Firebase ID token expired. Please sign in again.",
-    "auth/id-token-revoked": "Firebase ID token revoked. Please sign in again.",
-    "auth/invalid-id-token": "Invalid Firebase ID token. Please sign in again.",
-  };
-
-  if (firebaseAuthErrors[error.code]) {
-    error = new AppError(firebaseAuthErrors[error.code], 401);
-  }
-
   if (error.name === "CastError") {
     error = new AppError(`Invalid ${error.path}: ${error.value}`, 400);
   }

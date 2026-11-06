@@ -8,9 +8,11 @@ const proxyWithHeader = (serviceUrl) => {
         proxyReqOpts.headers["cookie"] = srcReq.headers.cookie;
       }
 
-      // 2. Forward user ID safely if req.user exists in the gateway
+      // 2. Prevent header spoofing & safely forward verified user ID
       if (srcReq.user?.id) {
         proxyReqOpts.headers["x-user-id"] = srcReq.user.id;
+      } else {
+        delete proxyReqOpts.headers["x-user-id"];
       }
 
       return proxyReqOpts;

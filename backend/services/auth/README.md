@@ -45,9 +45,8 @@ backend/services/auth/
 │   ├── db.js                 # MongoDB connection using Mongoose
 │   └── firebase.js           # Initializes Firebase Admin SDK with serviceAccountKey.json
 ├── controller/
-│   └── auth.controller.js    # Business logic for login, logout, and getMe
+│   └── auth.controller.js    # Business logic for login & logout
 ├── middlewares/
-│   ├── auth.middleware.js    # Reads session cookie, validates via Firebase & Redis
 │   ├── errorHandler.js       # Formats errors into standardized JSON responses
 │   └── notFound.js           # 404 handler
 ├── model/
@@ -76,14 +75,10 @@ backend/services/auth/
 6. **Redis Cache**: Saves the cookie in Redis with `redis.set(key, sessionCookie, "EX", 7 days)`.
 7. **Response**: Sets an `httpOnly`, `secure`, `sameSite: "lax"` cookie named `session` and returns the sanitized user JSON.
 
-### 2. `GET /me` (Session Hydration)
+### 2. `GET /auth/me` (Edge Session Hydration via Gateway)
 When the user refreshes the page:
 1. React calls `GET /auth/me` with `withCredentials: true`.
-2. The browser automatically includes the `session` cookie.
-3. The server reads `req.cookies.session`.
-4. It calls **`auth.verifySessionCookie(sessionCookie, true)`** with `checkRevoked = true`.
-   - If the user's password was changed or tokens revoked, this immediately fails.
-5. If valid, the user record is fetched from MongoDB and returned to React.
+2. The **API Gateway** intercepts this at the edge, verifies the session from **Redis in < 1ms**, and returns the cached user profile instantly without waking the Auth service or MongoDB!
 
 ### 3. `POST /logout` (Full Invalidation)
 Security means not just deleting the cookie from the browser, but **destroying it on the server**:

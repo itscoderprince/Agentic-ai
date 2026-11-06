@@ -20,8 +20,8 @@ flowchart TD
         ReactApp["🖥️ React 19 + Vite 8\nZustand, Tailwind CSS v4, Shadcn\n(Port 5173)"]:::client
     end
 
-    subgraph IngressLayer ["2. Ingress & Routing (Gateway)"]
-        Gateway["🚪 API Gateway (Express 5)\nReverse Proxy + CORS\n(Port 1000)"]:::gateway
+    subgraph IngressLayer ["2. Ingress & Edge Security (Gateway)"]
+        Gateway["🚪 API Gateway (Express 5)\nEdge Auth Guard (verifyGatewayAuth)\nInstant GET /auth/me (< 1ms)\n(Port 1000)"]:::gateway
     end
 
     subgraph Microservices ["3. Dedicated Microservices"]
@@ -38,17 +38,19 @@ flowchart TD
     %% Client traffic
     ReactApp -- "All HTTP calls withCredentials: true" --> Gateway
 
+    %% Edge Auth & Hydration
+    Gateway -- "Session Verification & Hydration (<1ms)" --> Redis
+
     %% Gateway Reverse Proxying
-    Gateway -- "proxy /auth/*" --> AuthSvc
-    Gateway -- "proxyWithHeader /chat/*" --> ChatSvc
-    Gateway -- "proxyWithHeader /agent/*" --> AgentSvc
+    Gateway -- "proxy /auth/* (login, logout)" --> AuthSvc
+    Gateway -- "proxyWithHeader /chat/* (+ x-user-id)" --> ChatSvc
+    Gateway -- "proxyWithHeader /agent/* (+ x-user-id)" --> AgentSvc
 
     %% Service connections
     AuthSvc --> Redis
     AuthSvc --> MongoDB
 
     ChatSvc --> MongoDB
-    AgentSvc --> MongoDB
 ```
 
 ---
@@ -60,9 +62,9 @@ Each service has a single, well-defined job. **Never mix service responsibilitie
 | Service | Port | Primary Job | What It Owns | What It Should NEVER Do |
 | :--- | :--- | :--- | :--- | :--- |
 | **Frontend** | `5173` | UI & UX | React components, Zustand stores, client Firebase auth | Never query databases directly; all API calls go to Gateway (Port 1000). |
-| **Gateway** | `1000` | Ingress Entrypoint | CORS handling, reverse-proxying client requests, forwarding headers | Never query databases or run LLM agents directly. |
-| **Auth** | `2000` | Identity & Security | Firebase Admin verification, user profile in MongoDB, Redis session cache | Never handle chat message storage or agent pipelines. |
-| **Chat** | `3000` | Chat Management | Conversations and messages persistence in MongoDB | Does **not** need `firebase-admin` or user authentication logic; receives verified `x-user-id` from Gateway. |
+| **Gateway** | `1000` | Ingress & Edge Auth | CORS, Edge Auth Guard (`verifyGatewayAuth`), `GET /auth/me` cache hydration, reverse proxying with `x-user-id` | Never query MongoDB or run LLM agents directly. |
+| **Auth** | `2000` | Identity & Security | Firebase Admin verification, user profile in MongoDB, Redis session creation & revocation | Never handle chat message storage or agent pipelines. |
+| **Chat** | `3000` | Chat Management | Conversations and messages persistence in MongoDB | Does **not** need `firebase-admin` or Redis; receives verified `x-user-id` from Gateway. |
 | **Agent** | `4000` | AI Reasoning Pipeline | LangGraph orchestration, specialized agents (coding, search, vision, pdf, ppt) | Pure reasoning service; calls LLMs and returns AI responses. |
 
 ---
@@ -76,24 +78,22 @@ Agentic AI/
 │   ├── shared/
 │   │   └── redis/redis.js              # Reusable Redis connection client
 │   └── services/
-│       ├── gateway/ (Port 1000)        # Ingress Reverse Proxy
-│       │   ├── configs/db.js           # Shared DB connection
-│       │   ├── middlewares/            # errorHandler, notFound
-│       │   ├── utils/proxyWithHeader.js# Clean proxy header decorator
-│       │   └── index.js                # App entrypoint (routes /auth, /chat, /agent)
+│       ├── gateway/ (Port 1000)        # Ingress & Edge Auth Guard
+│       │   ├── middlewares/            # auth.middleware (verifyGatewayAuth), errorHandler, notFound
+│       │   ├── utils/proxyWithHeader.js# Injects verified x-user-id & scrubs spoofed headers
+│       │   └── index.js                # App entrypoint (routes /auth, /chat, /agent, GET /auth/me)
 │       │
 │       ├── auth/ (Port 2000)           # Authentication Microservice
 │       │   ├── configs/firebase.js     # Firebase Admin SDK (ONLY here!)
 │       │   ├── configs/db.js           # MongoDB connection
-│       │   ├── controller/auth.controller.js # login, logout, getMe
-│       │   ├── middlewares/auth.middleware.js # Session verification via Firebase/Redis
+│       │   ├── controller/auth.controller.js # login, logout
 │       │   ├── model/user.model.js     # Mongoose User model
-│       │   ├── routes/auth.route.js    # /login, /logout, /me
+│       │   ├── routes/auth.route.js    # /login, /logout
 │       │   └── utils/                  # ApiError, AsyncHandler, sendResponse
 │       │
 │       ├── chat/ (Port 3000)           # Chat Management Service
 │       │   ├── configs/db.js           # MongoDB connection
-│       │   ├── controller/chat.controller.js # createConversation, getConversations
+│       │   ├── controller/chat.controller.js # createConversation, getConversations, saveMessages
 │       │   ├── middlewares/auth.middleware.js # Extracts user identity (x-user-id)
 │       │   ├── model/conversation.model.js   # Conversation schema & indexes
 │       │   ├── model/message.model.js        # Message schema & indexes
@@ -102,7 +102,6 @@ Agentic AI/
 │       │
 │       └── agent/ (Port 4000)          # LangGraph Multi-Agent Orchestrator
 │           ├── configs/llmModels.js    # Groq, Google Gemini, DeepSeek configurations
-│           ├── configs/db.js           # MongoDB connection
 │           ├── controller/agent.controller.js # Receives prompt & runs agentGraph
 │           ├── graph/
 │           │   ├── state.js            # AgentState schema (prompt, agent, aiResponse)
@@ -115,7 +114,7 @@ Agentic AI/
 │           │   ├── pdf.agent.js        # PDF document analysis
 │           │   ├── ppt.agent.js        # Slide deck generator
 │           │   └── vision.agent.js     # Multimodal & image OCR
-│           ├── middlewares/auth.middleware.js # Lightweight user check
+│           ├── middlewares/auth.middleware.js # Lightweight user check (x-user-id)
 │           ├── routes/agent.route.js   # POST / (executes agent pipeline)
 │           └── README.md               # Visual Mermaid LangGraph diagram
 │

@@ -20,19 +20,31 @@ export const login = AsyncHandler(async (req, res) => {
 
   const decoded = await auth.verifyIdToken(token.trim());
 
-  // Find user in MongoDB
+  // 2. Find user in MongoDB
   let user = await User.findOne({
     firebaseUid: decoded.uid,
   });
 
-  // Create user if not already registered
+  // 3. New User vs Existing User Flow
   if (!user) {
+    // NEW USER: Create fresh MongoDB profile
     user = await User.create({
       firebaseUid: decoded.uid,
       name: decoded.name || decoded.displayName || "User",
       email: decoded.email,
       avatar: decoded.picture || decoded.photoURL || "",
+      emailVerified: Boolean(decoded.email_verified),
     });
+  } else {
+    // EXISTING USER: Sync profile if name or avatar changed on Google
+    const latestName = decoded.name || decoded.displayName || user.name;
+    const latestAvatar = decoded.picture || decoded.photoURL || user.avatar;
+
+    if (user.name !== latestName || user.avatar !== latestAvatar) {
+      user.name = latestName;
+      user.avatar = latestAvatar;
+      await user.save();
+    }
   }
 
   // Create Firebase session cookie
@@ -102,18 +114,4 @@ export const logout = AsyncHandler(async (req, res) => {
   }
 
   return sendResponse(res, 200, true, "Logout successful");
-});
-
-// Get Current Authenticated User func
-export const getMe = AsyncHandler(async (req, res) => {
-  return sendResponse(
-    res,
-    200,
-    true,
-    `Authenticated user retrieved from ${req.authSource === "redis" ? "Redis cache" : "MongoDB database"}`,
-    {
-      source: req.authSource,
-      user: req.user,
-    }
-  );
 });

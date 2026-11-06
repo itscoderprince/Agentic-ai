@@ -9,11 +9,9 @@ import AppError from "../utils/ApiError.js";
  * POST /conversations
  */
 export const createConversation = AsyncHandler(async (req, res) => {
-  const { title } = req.body || {};
-
   const conversation = await Conversation.create({
     userId: req.user.id,
-    title: title || "New chat",
+    title: req.validated.title,
   });
 
   return sendResponse(res, 201, true, "Conversation created successfully", {
@@ -41,15 +39,10 @@ export const getConversations = AsyncHandler(async (req, res) => {
  */
 export const updateConversation = AsyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { title, isPinned } = req.body || {};
-
-  const updates = {};
-  if (title !== undefined) updates.title = String(title).trim();
-  if (isPinned !== undefined) updates.isPinned = Boolean(isPinned);
 
   const conversation = await Conversation.findOneAndUpdate(
     { _id: id, userId: req.user.id },
-    { $set: updates },
+    { $set: req.validated },
     { new: true, runValidators: true }
   );
 
@@ -63,12 +56,33 @@ export const updateConversation = AsyncHandler(async (req, res) => {
 });
 
 /**
+ * Delete a conversation and cascade delete its messages
+ * DELETE /conversations/:id
+ */
+export const deleteConversation = AsyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const conversation = await Conversation.findOneAndDelete({
+    _id: id,
+    userId: req.user.id,
+  });
+
+  if (!conversation) {
+    throw new AppError("Conversation not found", 404);
+  }
+
+  // Cascade delete all messages in this conversation to avoid orphaned records
+  await Message.deleteMany({ conversationId: id });
+
+  return sendResponse(res, 200, true, "Conversation deleted successfully");
+});
+
+/**
  * Save messages to a conversation (supports single message or batch array)
  * POST /conversations/:id/messages
  */
 export const saveMessages = AsyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { role, content, messages } = req.body || {};
 
   // 1. Verify conversation ownership
   const conversation = await Conversation.findOne({
@@ -80,32 +94,20 @@ export const saveMessages = AsyncHandler(async (req, res) => {
     throw new AppError("Conversation not found", 404);
   }
 
-  let saved;
+  // 2. Attach conversationId to validated & normalized messages
+  const docs = req.validated.map((m) => ({
+    conversationId: id,
+    role: m.role,
+    content: m.content,
+  }));
 
-  // 2. Support batch message array or single message
-  if (Array.isArray(messages) && messages.length > 0) {
-    const docs = messages.map((m) => ({
-      conversationId: id,
-      role: m.role || "user",
-      content: String(m.content || "").trim(),
-    }));
-    saved = await Message.insertMany(docs);
-  } else {
-    if (!content || !String(content).trim()) {
-      throw new AppError("Message content is required", 400);
-    }
-    saved = await Message.create({
-      conversationId: id,
-      role: role || "user",
-      content: String(content).trim(),
-    });
-  }
+  const saved = await Message.insertMany(docs);
 
   // 3. Bump conversation updatedAt timestamp
-  await Conversation.findByIdAndUpdate(id, { $set: { updatedAt: new Date() } });
+  await Conversation.updateOne({ _id: id }, { $set: { updatedAt: new Date() } });
 
   return sendResponse(res, 201, true, "Message(s) saved successfully", {
-    messages: Array.isArray(saved) ? saved : [saved],
+    messages: saved,
   });
 });
 

@@ -64,9 +64,10 @@ VITE_SERVER_URL=http://localhost:1000
 
 #### Gateway (`backend/services/gateway/.env`)
 ```env
-MONGODB_URI=your_mongodb_connection_string
 PORT=1000
 AUTH_SERVICE=http://localhost:2000
+CHAT_SERVICE=http://localhost:3000
+AGENT_SERVICE=http://localhost:4000
 REDIS_URL=redis://localhost:6379
 ```
 
@@ -77,6 +78,23 @@ PORT=2000
 NODE_ENV=development
 SESSION_EXPIRY=604800000
 REDIS_URL=redis://localhost:6379
+```
+
+#### Chat Service (`backend/services/chat/.env`)
+```env
+MONGODB_URI=your_mongodb_connection_string
+PORT=3000
+NODE_ENV=development
+SESSION_EXPIRY=604800000
+```
+
+#### Agent Service (`backend/services/agent/.env`)
+```env
+PORT=4000
+NODE_ENV=development
+GROQ_API_KEY=your_groq_api_key
+GOOGLE_API_KEY=your_google_api_key
+DEEPSEEK_API_KEY=your_deepseek_api_key
 ```
 *Note: Ensure `backend/services/auth/serviceAccountKey.json` contains your Firebase Admin SDK service account key.*
 

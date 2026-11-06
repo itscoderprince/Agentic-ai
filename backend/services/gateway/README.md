@@ -1,7 +1,7 @@
 # 🚪 Gateway Service — The Front Door of Agentic AI
 
 > **Port**: `1000`  
-> **Role**: API Gateway, Reverse Proxy, CORS Manager & Session Forwarder  
+> **Role**: API Gateway, Reverse Proxy, CORS Manager & Session Forwarder 
 > **Analogy**: Think of the Gateway like the **Airport Security & Gate Boarding Desk**. The traveler (React Frontend) only enters through **one single gate** (Port 1000). The security agent checks permissions (CORS), preserves their ticket/badge (Cookies & User ID), and directs them to the correct terminal flight (Auth, Chat, or Agent service).
 
 ---
@@ -21,20 +21,24 @@ flowchart TD
     subgraph GatewayScope ["🚪 Gateway Server (Port 1000)"]
         direction TB
         CORS["1️⃣ CORS Middleware<br/><i>Allows credentials & localhost:5173</i>"]:::middleware
-        PROXY_AUTH["2️⃣ Proxy: /auth<br/><i>express-http-proxy</i>"]:::gateway
-        PROXY_CHAT["3️⃣ Proxy: /chat<br/><i>proxyWithHeader (forwards cookies)</i>"]:::gateway
-        PROXY_AGENT["4️⃣ Proxy: /agent<br/><i>proxyWithHeader (forwards cookies)</i>"]:::gateway
-        BODY_PARSER["5️⃣ express.json()<br/><i>Parsed ONLY after proxy routes</i>"]:::middleware
+        GET_ME["2️⃣ GET /auth/me<br/><i>Instant Redis cache hydration (<1ms)</i>"]:::gateway
+        PROXY_AUTH["3️⃣ Proxy: /auth/*<br/><i>Public Google Login / Logout</i>"]:::gateway
+        AUTH_GUARD["4️⃣ verifyGatewayAuth Guard<br/><i>Checks session in Redis (<1ms)</i>"]:::middleware
+        PROXY_CHAT["5️⃣ Proxy: /chat/*<br/><i>proxyWithHeader (+ verified x-user-id)</i>"]:::gateway
+        PROXY_AGENT["6️⃣ Proxy: /agent/*<br/><i>proxyWithHeader (+ verified x-user-id)</i>"]:::gateway
     end
 
     AUTH_SVC["🔐 Auth Service<br/>Port 2000"]:::service
     CHAT_SVC["💬 Chat Service<br/>Port 3000"]:::service
     AGENT_SVC["🤖 Agent Service<br/>Port 4000"]:::service
+    REDIS["⚡ Redis RAM (6379)"]:::middleware
 
     CLIENT -->|"Request with cookies"| CORS
+    CORS --> GET_ME -->|"Session Check"| REDIS
     CORS --> PROXY_AUTH -->|Direct stream| AUTH_SVC
-    CORS --> PROXY_CHAT -->|Stream + Cookie Header| CHAT_SVC
-    CORS --> PROXY_AGENT -->|Stream + Cookie Header| AGENT_SVC
+    CORS --> AUTH_GUARD -->|"Verify Session"| REDIS
+    AUTH_GUARD --> PROXY_CHAT -->|Stream + x-user-id| CHAT_SVC
+    AUTH_GUARD --> PROXY_AGENT -->|Stream + x-user-id| AGENT_SVC
 ```
 
 ---
@@ -59,12 +63,13 @@ Without a gateway:
 
 ```
 backend/services/gateway/
-├── configs/
-│   └── db.js                 # MongoDB connection (for gateway health/logging)
 ├── middlewares/
+│   ├── auth.middleware.js    # Edge Auth Guard: verifies Redis session in <1ms & injects req.user
 │   ├── errorHandler.js       # Catches unhandled errors & returns clean JSON
 │   └── notFound.js           # Catches 404 routes not registered
 ├── utils/
+│   ├── ApiError.js           # Standardized error definitions
+│   ├── AsyncHandler.js       # Promise rejection wrapper
 │   └── proxyWithHeader.js    # Decorator that attaches cookies & user ID to proxied requests
 ├── .env                      # Ports & Downstream Service URLs
 ├── index.js                  # Main entry point & proxy configuration
@@ -112,8 +117,8 @@ app.use(cors({ origin: ["http://localhost:5173"], credentials: true }));
 
 // 2. PROXIES SECOND: Forward raw streams directly to downstream microservices!
 app.use("/auth", proxy(process.env.AUTH_SERVICE));
-app.use("/chat", proxyWithHeader(process.env.CHAT_SERVICE));
-app.use("/agent", proxyWithHeader(process.env.AGENT_SERVICE));
+app.use("/chat", verifyGatewayAuth, proxyWithHeader(process.env.CHAT_SERVICE));
+app.use("/agent", verifyGatewayAuth, proxyWithHeader(process.env.AGENT_SERVICE));
 
 // 3. BODY PARSER THIRD: Native JSON parser
 app.use(express.json());

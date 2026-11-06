@@ -47,42 +47,56 @@ flowchart TD
 
 ### Why Do We Even Need a Gateway?
 **Problem without a Gateway**: If you had 3 backend services (Auth on 2000, Chat on 3000, Agent on 4000), your frontend would have to keep track of 3 different URLs, manage 3 different CORS permissions, and send cookies across multiple domains.
-**Solution with a Gateway**: The frontend only ever talks to **`http://localhost:1000`**. The Gateway acts as a **Single Front Door** (Reverse Proxy).
+**Solution with a Gateway**: The frontend only ever talks to **`http://localhost:1000`**. The Gateway acts as a **Single Front Door & Edge Bouncer** (Reverse Proxy + Edge Auth).
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Browser as Frontend (5173)
     participant GW as Gateway (1000)
+    participant Redis as Redis Cache (6379)
     participant Chat as Chat Service (3000)
 
-    Browser->>GW: POST http://localhost:1000/chat/conversations
-    Note over GW: proxyWithHeader intercepts
-    Note over GW: 1. Preserves Cookie header<br/>2. Forwards client IP & Host
-    GW->>Chat: POST http://localhost:3000/conversations
-    Chat-->>GW: 201 Created: { conversation }
-    GW-->>Browser: 201 Created: { conversation }
+    Browser->>GW: GET http://localhost:1000/chat/conversations
+    Note over GW: 1. verifyGatewayAuth intercepts
+    GW->>Redis: 2. Check session in Redis (<1ms)
+    Redis-->>GW: ✅ Session valid (user: { id: "672a..." })
+    Note over GW: 3. proxyWithHeader attaches [x-user-id]
+    GW->>Chat: GET http://localhost:3000/conversations + [x-user-id]
+    Chat-->>GW: 200 OK: [ conversations ]
+    GW-->>Browser: 200 OK: [ conversations ]
 ```
 
-### Key Packages in Gateway:
-- **`express-http-proxy`**: The magic package that takes an incoming request stream and pipes it directly to another server without consuming memory or converting it to JSON first.
+### Key Responsibilities in Gateway:
+- **`verifyGatewayAuth` (Edge Auth Guard)**: Verifies incoming cookies against Redis RAM in `< 1ms`. If valid, attaches verified user identity; if fake or expired, blocks it at the front door before bothering downstream services!
+- **`GET /auth/me` (Edge Hydration)**: Directly returns the user's cached profile from Redis in `< 1ms` on page refresh, without waking MongoDB or the Auth Service.
+- **`express-http-proxy`**: The magic package that pipes incoming request streams directly to target microservices without buffering entire payloads in RAM.
 - **`cors`**: Tells the browser: *"Yes, requests from `http://localhost:5173` are allowed to talk to me and send cookies (`credentials: true`)."*
+- **No MongoDB**: The Gateway has 0 database models and executes 0 DB queries. It only connects to Redis RAM.
 
 ### Under The Hood: `proxyWithHeader.js`
 ```javascript
 const proxyWithHeader = (serviceUrl) => {
   return proxy(serviceUrl, {
     proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
-      // Passes the traveler's security wristband (cookie) along to Chat/Agent
+      // 1. Forward the session cookie
       if (srcReq.headers.cookie) {
         proxyReqOpts.headers["cookie"] = srcReq.headers.cookie;
       }
+
+      // 2. Prevent header spoofing & securely inject verified user ID
+      if (srcReq.user?.id) {
+        proxyReqOpts.headers["x-user-id"] = srcReq.user.id;
+      } else {
+        delete proxyReqOpts.headers["x-user-id"];
+      }
+
       return proxyReqOpts;
     },
   });
 };
 ```
-*Why this syntax?* `proxyReqOptDecorator` is an Express HTTP Proxy hook. Before the proxy packet leaves Port 1000 to travel to Port 3000, this function copies the browser's `cookie` so the receiving service knows who sent it.
+*Why this syntax?* `proxyReqOptDecorator` is an Express HTTP Proxy hook. Before the proxy packet leaves Port 1000 to travel to Port 3000, this function safely injects the verified `x-user-id` and deletes any user-forged headers!
 
 ---
 

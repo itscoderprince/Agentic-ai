@@ -39,23 +39,26 @@ backend/services/chat/
 ├── configs/
 │   └── db.js                 # MongoDB connection using Mongoose
 ├── controller/
-│   └── chat.controller.js    # 5 Controller functions: create, list, update, save messages, get history
+│   └── chat.controller.js    # 6 Focused controller functions: create, list, update, delete, save, list messages
 ├── middlewares/
 │   ├── auth.middleware.js    # Lightweight 10-line protect middleware (DRY)
 │   ├── errorHandler.js       # Global error response handler
-│   └── notFound.js           # 404 handler
+│   ├── notFound.js           # 404 handler
+│   └── validate.middleware.js # Reusable Zod validation middleware (attaches req.validated)
 ├── model/
 │   ├── conversation.model.js # Conversation schema with compound index
 │   └── message.model.js      # Message schema with compound index
 ├── routes/
-│   └── chat.route.js         # REST endpoints protected by router.use(protect)
+│   └── chat.route.js         # REST endpoints protected by router.use(protect) and validate()
+├── schemas/
+│   └── chat.schema.js        # Zod validation schemas with type auto-trimming & role mapping
 ├── utils/
 │   ├── ApiError.js           # Custom Error with HTTP status codes
 │   ├── AsyncHandler.js       # Catches async promise rejections
 │   └── sendResponse.js       # Consistent JSON response formatter
 ├── .env                      # Service Port & Mongo URI
 ├── index.js                  # Express app entry point
-└── package.json              # Chat dependencies
+└── package.json              # Chat dependencies (including Zod)
 ```
 
 ---
@@ -109,25 +112,36 @@ Instead of writing `if (!userId) throw new ApiError(...)` inside every single co
 
 ```javascript
 import express from "express";
-import { protect } from "../middlewares/auth.middleware.js";
 import {
   createConversation,
   getConversations,
   updateConversation,
+  deleteConversation,
   saveMessages,
   getMessages,
 } from "../controller/chat.controller.js";
+import { protect } from "../middlewares/auth.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
+import {
+  createConversationSchema,
+  updateConversationSchema,
+  saveMessagesSchema,
+} from "../schemas/chat.schema.js";
 
 const router = express.Router();
 
-// 🛡️ One single line protects ALL chat endpoints below!
+// 🛡️ Protect ALL chat endpoints below
 router.use(protect);
 
-router.post("/conversations", createConversation);
+// Conversation management
+router.post("/conversations", validate(createConversationSchema), createConversation);
 router.get("/conversations", getConversations);
-router.patch("/conversations/:id", updateConversation);
-router.post("/messages", saveMessages);
-router.get("/messages/:conversationId", getMessages);
+router.patch("/conversations/:id", validate(updateConversationSchema), updateConversation);
+router.delete("/conversations/:id", deleteConversation);
+
+// Message management
+router.post("/conversations/:id/messages", validate(saveMessagesSchema), saveMessages);
+router.get("/conversations/:id/messages", getMessages);
 
 export default router;
 ```
@@ -139,10 +153,11 @@ export default router;
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/chat/conversations` | Creates a new chat session (`{ title }`). |
-| `GET` | `/chat/conversations` | Retrieves all active conversations for the authenticated user. |
-| `PATCH` | `/chat/conversations/:id` | Updates chat properties (renaming `title`, toggling `isPinned`, or setting `archived`). |
-| `POST` | `/chat/messages` | Saves a message or batch of messages (`{ conversationId, sender, text }`). |
-| `GET` | `/chat/messages/:conversationId` | Loads full message history for a specific conversation in chronological order. |
+| `GET` | `/chat/conversations` | Retrieves all conversations for the user, sorted by pinned first and updated time. |
+| `PATCH` | `/chat/conversations/:id` | Updates chat properties (renaming `title` or toggling `isPinned`). |
+| `DELETE` | `/chat/conversations/:id` | Deletes conversation and cascades deletion of all its messages. |
+| `POST` | `/chat/conversations/:id/messages` | Saves a message or batch of messages (`{ role, content }` or `{ messages: [...] }`). |
+| `GET` | `/chat/conversations/:id/messages` | Loads chronological message history for a conversation. |
 
 ---
 

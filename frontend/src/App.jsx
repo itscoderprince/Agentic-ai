@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import GoogleLoginCard from "@/components/ui/GoogleLoginCard";
-import Page from "@/pages/ChatPage";
+
+const ChatPage = lazy(() => import("@/pages/ChatPage"));
 
 export default function App() {
   const user = useAuthStore((s) => s.user);
@@ -24,5 +25,15 @@ export default function App() {
     return <GoogleLoginCard />;
   }
 
-  return <Page />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-svh items-center justify-center bg-background">
+          <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      }
+    >
+      <ChatPage />
+    </Suspense>
+  );
 }

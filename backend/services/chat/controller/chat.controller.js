@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Conversation from "../model/conversation.model.js";
 import Message from "../model/message.model.js";
 import AsyncHandler from "../utils/AsyncHandler.js";
@@ -40,6 +41,10 @@ export const getConversations = AsyncHandler(async (req, res) => {
 export const updateConversation = AsyncHandler(async (req, res) => {
   const { id } = req.params;
 
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError("Conversation not found", 404);
+  }
+
   const conversation = await Conversation.findOneAndUpdate(
     { _id: id, userId: req.user.id },
     { $set: req.validated },
@@ -62,6 +67,10 @@ export const updateConversation = AsyncHandler(async (req, res) => {
 export const deleteConversation = AsyncHandler(async (req, res) => {
   const { id } = req.params;
 
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError("Conversation not found", 404);
+  }
+
   const conversation = await Conversation.findOneAndDelete({
     _id: id,
     userId: req.user.id,
@@ -83,6 +92,10 @@ export const deleteConversation = AsyncHandler(async (req, res) => {
  */
 export const saveMessages = AsyncHandler(async (req, res) => {
   const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError("Conversation not found", 404);
+  }
 
   // 1. Verify conversation ownership
   const conversation = await Conversation.findOne({
@@ -117,6 +130,10 @@ export const saveMessages = AsyncHandler(async (req, res) => {
  */
 export const getMessages = AsyncHandler(async (req, res) => {
   const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError("Conversation not found", 404);
+  }
 
   // 1. Verify conversation ownership
   const conversation = await Conversation.findOne({

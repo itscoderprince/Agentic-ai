@@ -33,6 +33,8 @@ A modern, full-stack platform for AI agent chat, autonomous workflows, and inter
 ├── .agents/                     # Rules for AI coding assistants
 ├── AGENTS.md                    # Universal AI agent instructions
 ├── ARCHITECTURE.md              # Detailed system architecture & diagrams
+├── BACKEND_LEARNING_GUIDE.md    # In-depth backend microservices & Redis learning guide
+├── STATE_MANAGEMENT_GUIDE.md    # Frontend state management & store flows guide
 └── GEMINI.md                    # Antigravity/Gemini workspace rules
 ```
 

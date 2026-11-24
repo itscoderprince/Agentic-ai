@@ -14,7 +14,6 @@ flowchart TD
     classDef gate fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#ffffff;
     classDef svc fill:#0f172a,stroke:#3b82f6,stroke-width:1.5px,color:#e2e8f0;
     classDef db fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5;
-
     Traveler["👤 1. The Traveler\n(React 19 Frontend :5173)"]:::client
     Entrance["🚪 2. Security & Direction Desk\n(Gateway Server :1000)"]:::gate
 

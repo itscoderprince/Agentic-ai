@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -8,8 +8,10 @@ import {
 import { SearchDialog } from "@/components/search-dialog";
 import { Button } from "@/components/ui/button";
 import { useChatStore } from "@/store/useChatStore";
+import { ChatMessages } from "@/components/chat-messages";
+import { ChatInput } from "@/components/chat-input";
 import {
-  BotIcon,
+  BrainCircuit,
   PanelLeftIcon,
   SearchIcon,
   MessageSquarePlusIcon,
@@ -17,23 +19,101 @@ import {
 } from "lucide-react";
 import { cn } from "cn";
 
+function HeaderTitle({ chat, onRename }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(chat?.title || "");
+
+  const [prevChatId, setPrevChatId] = useState(chat?.id);
+  if (chat?.id !== prevChatId) {
+    setPrevChatId(chat?.id);
+    setTitle(chat?.title || "");
+    setIsEditing(false);
+  }
+
+  const handleSave = () => {
+    setIsEditing(false);
+    const clean = title.trim();
+    if (clean && clean !== chat.title) {
+      onRename(clean);
+    } else {
+      setTitle(chat.title);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setTitle(chat.title);
+      setIsEditing(false);
+    }
+  };
+
+  if (!chat) {
+    return (
+      <div className="min-w-0 flex items-center">
+        <span className="text-[0.9375rem] font-semibold text-foreground select-none py-1 px-1">
+          New chat
+        </span>
+      </div>
+    );
+  }
+
+  // Editing state (Image 2 reference: blue bordered pill input auto-sized strictly to text)
+  if (isEditing) {
+    return (
+      <div className="min-w-0 flex items-center">
+        <div className="relative inline-flex items-center min-w-[60px] max-w-[340px] sm:max-w-[420px]">
+          {/* Invisible mirror span driving exact pixel width */}
+          <span
+            aria-hidden="true"
+            className="invisible whitespace-pre px-3.5 py-1 text-[0.9375rem] font-semibold select-none pointer-events-none"
+          >
+            {title || "\u00A0"}
+          </span>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            autoFocus
+            className="absolute inset-0 w-full h-full rounded-full border bg-secondary/40 dark:bg-neutral-900/90 px-3.5 py-1 text-[0.9375rem] font-semibold text-foreground outline-none ring-0 shadow-xs"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Normal state (Image 1 reference: clean text title)
+  return (
+    <div className="min-w-0 flex items-center">
+      <span
+        onClick={() => setIsEditing(true)}
+        title="Click to rename"
+        className="text-[0.9375rem] font-semibold text-foreground truncate cursor-pointer hover:opacity-80 transition-opacity select-none py-1 px-1 rounded-sm"
+      >
+        {chat.title}
+      </span>
+    </div>
+  );
+}
+
 function ChatHeader() {
   const { open, isMobile, openMobile, toggleSidebar } = useSidebar();
   const isOpen = isMobile ? openMobile : open;
 
   const chats = useChatStore((s) => s.chats);
   const activeId = useChatStore((s) => s.activeId);
-  const activeChat = chats.find((c) => c.id === activeId) || chats[0];
+  const activeChat = activeId
+    ? chats.find((c) => (c.id || c._id) === activeId) || null
+    : null;
   const newChat = useChatStore((s) => s.newChat);
   const renameChat = useChatStore((s) => s.renameChat);
   const searchOpen = useChatStore((s) => s.searchOpen);
   const setSearchOpen = useChatStore((s) => s.setSearchOpen);
-
-  const handleRenameActive = () => {
-    if (!activeChat) return;
-    const nextTitle = window.prompt("Rename chat:", activeChat.title);
-    if (nextTitle) renameChat(activeChat.id, nextTitle);
-  };
 
   const handleShare = () => {
     if (navigator.clipboard) {
@@ -64,7 +144,7 @@ function ChatHeader() {
     <>
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 px-3 sm:px-4 border-b border-border/60">
         <div className="flex items-center min-w-0 flex-1">
-          {/* DeepSeek-inspired closed-sidebar capsule (smoothly slides into sidebar on expand) */}
+          {/* DeepSeek-inspired closed-sidebar capsule */}
           <div
             className={cn(
               "flex items-center h-10 shrink-0 transition-all duration-300 ease-in-out",
@@ -79,7 +159,7 @@ function ChatHeader() {
                 className="flex items-center justify-center size-8.5 rounded-lg cursor-pointer hover:bg-secondary dark:hover:bg-neutral-800 transition-all active:scale-95"
                 onClick={toggleSidebar}
               >
-                <BotIcon className="size-5.5 text-blue-600 dark:text-blue-400" />
+                <BrainCircuit className="size-5.5 text-blue-600 dark:text-blue-400" />
               </div>
 
               {/* Pill Capsule: Sidebar Toggle | Search | New Chat */}
@@ -101,18 +181,13 @@ function ChatHeader() {
             </div>
           </div>
 
-          {/* Current Conversation Title: always visible in both sidebar open and close, clean text */}
-          {activeChat && (
-            <div className="min-w-0 flex items-center">
-              <span
-                onClick={handleRenameActive}
-                title="Click to rename"
-                className="text-[0.9375rem] font-semibold text-foreground truncate select-none cursor-pointer hover:opacity-80 transition-opacity"
-              >
-                {activeChat.title}
-              </span>
-            </div>
-          )}
+          {/* Current Conversation Title (DeepSeek inline editable: Image 1 & 2 references) */}
+          <HeaderTitle
+            chat={activeChat}
+            onRename={(newTitle) => {
+              if (activeChat) renameChat(activeChat.id || activeChat._id, newTitle);
+            }}
+          />
         </div>
 
         {/* Right side Share button */}
@@ -137,23 +212,33 @@ function ChatHeader() {
 
 export default function Page() {
   const fetchChats = useChatStore((s) => s.fetchChats);
+  const selectChat = useChatStore((s) => s.selectChat);
+  const newChat = useChatStore((s) => s.newChat);
 
   useEffect(() => {
     fetchChats();
-  }, [fetchChats]);
+
+    const handlePopState = () => {
+      const match = window.location.pathname.match(/\/c\/([a-zA-Z0-9_-]+)/);
+      if (match?.[1]) {
+        selectChat(match[1], false);
+      } else {
+        newChat(false);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [fetchChats, selectChat, newChat]);
 
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="h-svh overflow-hidden">
         <ChatHeader />
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
-          </div>
-          <div className="min-h-screen flex-1 rounded-xl bg-muted/50 md:min-h-min" />
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+          <ChatMessages />
+          <ChatInput />
         </div>
       </SidebarInset>
     </SidebarProvider>

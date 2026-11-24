@@ -15,9 +15,11 @@ export const useAuthStore = create(
       checkAuth: async () => {
         try {
           const { data } = await api.get("/auth/me");
-          set({ user: data.user, isLoading: false }, false, "checkAuth/success");
+          set({ user: data.user }, false, "checkAuth/success");
         } catch {
-          set({ user: null, isLoading: false }, false, "checkAuth/fail");
+          set({ user: null }, false, "checkAuth/fail");
+        } finally {
+          set({ isLoading: false });
         }
       },
 
@@ -29,20 +31,19 @@ export const useAuthStore = create(
           const token = await firebaseUser.getIdToken();
           const { data } = await api.post("/auth/login", { token });
 
-          set({ user: data.user, isLoading: false }, false, "login/success");
+          set({ user: data.user }, false, "login/success");
         } catch (err) {
-          if (err.code === "auth/popup-closed-by-user") {
-            set({ isLoading: false }, false, "login/cancelled");
-            return;
-          }
+          if (err.code === "auth/popup-closed-by-user") return;
+
           set(
             {
               error: err.response?.data?.message || err.message || "Failed to sign in",
-              isLoading: false,
             },
             false,
             "login/error"
           );
+        } finally {
+          set({ isLoading: false });
         }
       },
 
@@ -56,6 +57,8 @@ export const useAuthStore = create(
         }
       },
     }),
-    { name: "AuthStore", enabled: true }
+    { name: "AgenticAI", store: "auth", enabled: true }
   )
 );
+
+export default useAuthStore;

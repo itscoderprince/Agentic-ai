@@ -2,6 +2,9 @@ import proxy from "express-http-proxy";
 
 const proxyWithHeader = (serviceUrl) => {
   return proxy(serviceUrl, {
+    proxyReqPathResolver: (req) => {
+      return req.url && req.url !== "" ? req.url : "/";
+    },
     proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
       // 1. Forward cookies so downstream services (like chat) receive the auth session
       if (srcReq.headers.cookie) {

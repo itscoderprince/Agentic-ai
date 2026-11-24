@@ -25,7 +25,7 @@ import { useThemeStore } from "@/store/useThemeStore";
 import {
   SettingsIcon,
   LifeBuoyIcon,
-  SparklesIcon,
+  Zap,
   LogOutIcon,
   ChevronRightIcon,
   MoonIcon,
@@ -89,7 +89,7 @@ export function NavUser() {
               </DropdownMenuItem>
 
               <DropdownMenuItem className="cursor-pointer gap-2.5 py-2 px-2.5 rounded-lg text-sm">
-                <SparklesIcon className="size-4" />
+                <Zap className="size-4 text-amber-500" />
                 <span>Upgrade plan</span>
               </DropdownMenuItem>
 

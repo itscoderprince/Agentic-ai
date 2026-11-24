@@ -7,6 +7,13 @@ import { ChatDeepSeek } from "@langchain/deepseek";
 export const groq = new ChatGroq({
   apiKey: process.env.GROQ_API_KEY,
   model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+  temperature: 0.7,
+  maxRetries: 2,
+});
+
+export const groqRouter = new ChatGroq({
+  apiKey: process.env.GROQ_API_KEY,
+  model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
   temperature: 0,
   maxRetries: 2,
 });
@@ -59,8 +66,11 @@ export const getModel = (usecase = "chat") => {
     case "gemini":
       return google;
 
-    // Fast Classification, General Chat, Search & Slides -> Groq (Llama / GPT-OSS)
+    // Fast Classification (Deterministic)
     case "router":
+      return groqRouter;
+
+    // Fast Generation, General Chat, Search & Slides (Creative & Natural)
     case "chat":
     case "search":
     case "ppt":

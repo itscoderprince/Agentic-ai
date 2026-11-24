@@ -5,6 +5,7 @@ import cors from "cors";
 import errorHandler from "./middlewares/errorHandler.js";
 import notFound from "./middlewares/notFound.js";
 import agentRouter from "./routes/agent.route.js";
+import { connectRedis } from "../../shared/redis/redis.js";
 
 const app = express();
 
@@ -36,6 +37,8 @@ app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 4000;
+
+await connectRedis();
 
 app.listen(PORT, () => {
   console.log(`🤖 Agent Server is running on PORT: http://localhost:${PORT}`);

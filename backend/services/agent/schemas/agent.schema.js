@@ -7,5 +7,6 @@ import { z } from "zod";
 export const runAgentSchema = z.object({
   prompt: z.string().trim().min(1, "Prompt string is required"),
   conversationId: z.string().trim().optional(),
+  agent: z.string().trim().optional(),
 });
 

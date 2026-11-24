@@ -121,9 +121,14 @@ Agentic AI/
 └── frontend/ (Port 5173)               # React 19 Application
     ├── components/                     # Shadcn UI primitives & custom components
     ├── pages/ChatPage.jsx              # DeepSeek-style chat page
-    ├── store/                          # Zustand global stores (useAuthStore, useChatStore)
+    ├── store/                          # Zustand global stores (useAuthStore, useChatStore, useThemeStore)
     └── utils/                          # Axios instance withCredentials: true
 ```
+
+> [!TIP]
+> **Detailed Guides**:
+> - Frontend state flows, optimistic updates, and reactive loops: [`STATE_MANAGEMENT_GUIDE.md`](./STATE_MANAGEMENT_GUIDE.md)
+> - Backend microservices, Redis caching, and edge routing: [`BACKEND_LEARNING_GUIDE.md`](./BACKEND_LEARNING_GUIDE.md)
 
 ---
 

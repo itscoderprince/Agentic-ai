@@ -11,7 +11,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useChatStore } from "@/store/useChatStore";
-import { BotIcon, Search, PlusCircle } from "lucide-react";
+import { BrainCircuit, Search, PlusCircle } from "lucide-react";
 
 export function AppSidebar({ ...props }) {
   const chats = useChatStore((s) => s.chats);
@@ -23,18 +23,13 @@ export function AppSidebar({ ...props }) {
   const deleteChat = useChatStore((s) => s.deleteChat);
   const setSearchOpen = useChatStore((s) => s.setSearchOpen);
 
-  const handleRename = (chat) => {
-    const nextTitle = window.prompt("Rename chat:", chat.title);
-    if (nextTitle) renameChat(chat.id, nextTitle);
-  };
-
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 px-1">
-              <BotIcon className="size-6 text-primary shrink-0" />
+              <BrainCircuit className="size-6 text-primary shrink-0" />
               <span className="font-bold text-[1.125rem] leading-none tracking-tight text-foreground select-none">
                 Agentic AI
               </span>
@@ -69,10 +64,10 @@ export function AppSidebar({ ...props }) {
         <NavChats
           chats={chats}
           activeId={activeId}
-          onSelectChat={(chat) => selectChat(chat.id)}
-          onPin={(chat) => pinChat(chat.id)}
-          onRename={handleRename}
-          onDelete={(chat) => deleteChat(chat.id)}
+          onSelectChat={(chat) => selectChat(chat.id || chat._id)}
+          onPin={(chat) => pinChat(chat.id || chat._id)}
+          onRename={(chat, newTitle) => renameChat(chat.id || chat._id, newTitle)}
+          onDelete={(chat) => deleteChat(chat.id || chat._id)}
         />
       </SidebarContent>
 

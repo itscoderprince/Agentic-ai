@@ -12,9 +12,10 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useChatStore } from "@/store/useChatStore";
+import { useChats } from "@/store/slices/conversationSlice";
 
 export function SearchDialog({ open, onOpenChange }) {
-  const chats = useChatStore((s) => s.chats);
+  const { data: chats = [] } = useChats();
   const selectChat = useChatStore((s) => s.selectChat);
 
   useEffect(() => {

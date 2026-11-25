@@ -1,128 +1,95 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/utils/axios";
+import { useChatStore } from "@/store/useChatStore";
 
 const isMongoId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
+
+export const chatKeys = {
+  all: ["chats"],
+};
 
 // Normalizes MongoDB _id to standard id
 export const normalizeChat = (chat) =>
   chat ? { ...chat, id: String(chat.id || chat._id) } : chat;
 
-export const createConversationSlice = (set, get) => ({
-  chats: [],
-  activeId: null,
-  isLoading: false,
-  searchOpen: false,
-
-  // Toggles command palette search modal
-  setSearchOpen: (searchOpen) =>
-    set({ searchOpen }, false, "conversation/setSearchOpen"),
-
-  // Selects conversation, syncs URL to /c/:id, and fetches messages
-  selectChat: (id, updateUrl = true) => {
-    if (!id || id === get().activeId) return;
-    set({ activeId: id }, false, "conversation/selectChat");
-    if (updateUrl && window.location.pathname !== `/c/${id}`) {
-      window.history.pushState(null, "", `/c/${id}`);
-    }
-    get().fetchMessages(id);
-  },
-
-  // Fetches all conversations and restores chat from /c/:id URL if present
-  fetchChats: async () => {
-    set({ isLoading: true }, false, "conversation/fetchChats/pending");
-    try {
+// Fetches & caches sidebar conversations automatically via TanStack Query
+export function useChats() {
+  return useQuery({
+    queryKey: chatKeys.all,
+    queryFn: async () => {
       const { data } = await api.get("/chat/conversations");
       const list = data.conversations || data.data?.conversations || [];
-      const chats = list.map(normalizeChat);
+      return list.map(normalizeChat);
+    },
+  });
+}
 
-      const urlMatch = window.location.pathname.match(/\/c\/([a-zA-Z0-9_-]+)/);
-      const urlId = urlMatch?.[1];
+// Creates a new conversation (used lazily on first prompt)
+export function useCreateChat() {
+  const queryClient = useQueryClient();
 
-      let activeId = null;
-      if (urlId && chats.some((c) => c.id === urlId)) {
-        activeId = urlId;
-      } else if (urlId) {
-        window.history.replaceState(null, "", "/");
-        activeId = null;
-      } else {
-        activeId = get().activeId;
+  return useMutation({
+    mutationFn: async (title) => {
+      const { data } = await api.post("/chat/conversations", { title });
+      return normalizeChat(data.conversation || data.data?.conversation);
+    },
+    onSuccess: (created) => {
+      queryClient.setQueryData(chatKeys.all, (old = []) => [created, ...old]);
+    },
+  });
+}
+
+// Optimistically renames or pins a chat with automatic rollback on failure
+export function useUpdateChat() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, updates }) => {
+      if (!isMongoId(id)) return null;
+      const { data } = await api.patch(`/chat/conversations/${id}`, updates);
+      return data;
+    },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: chatKeys.all });
+      const prevChats = queryClient.getQueryData(chatKeys.all);
+      queryClient.setQueryData(chatKeys.all, (old = []) =>
+        old.map((c) => (c.id === id ? { ...c, ...updates } : c))
+      );
+      return { prevChats };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prevChats) queryClient.setQueryData(chatKeys.all, ctx.prevChats);
+    },
+  });
+}
+
+// Optimistically deletes a chat, updates active selection, and clears message cache
+export function useDeleteChat() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id) => {
+      if (isMongoId(id)) await api.delete(`/chat/conversations/${id}`);
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: chatKeys.all });
+      const prevChats = queryClient.getQueryData(chatKeys.all) || [];
+      const remaining = prevChats.filter((c) => c.id !== id);
+      queryClient.setQueryData(chatKeys.all, remaining);
+
+      const { activeId, selectChat, newChat } = useChatStore.getState();
+      if (activeId === id) {
+        if (remaining[0]?.id) selectChat(remaining[0].id);
+        else newChat();
       }
 
-      set({ chats, activeId }, false, "conversation/fetchChats/success");
-      if (activeId) get().fetchMessages(activeId);
-    } catch {
-      // Keep existing state if offline
-    } finally {
-      set({ isLoading: false }, false, "conversation/fetchChats/settled");
-    }
-  },
-
-  // Opens a fresh empty chat at / without ghost DB records
-  newChat: (updateUrl = true) => {
-    const { activeId, messages, chats } = get();
-    if (messages.length === 0) {
-      if (!activeId) return;
-      const current = chats.find((c) => c.id === activeId);
-      if (current?.title === "New chat") return;
-    }
-    set({ activeId: null, messages: [] }, false, "conversation/openNewChat");
-    if (updateUrl && window.location.pathname !== "/") {
-      window.history.pushState(null, "", "/");
-    }
-  },
-
-  // Updates chat optimistically with rollback on failure
-  updateChat: (id, updates, actionName = "conversation/updateChat") => {
-    if (!id) return;
-    const prevChats = get().chats;
-
-    set(
-      { chats: prevChats.map((c) => (c.id === id ? { ...c, ...updates } : c)) },
-      false,
-      actionName
-    );
-
-    if (!isMongoId(id)) return;
-    api.patch(`/chat/conversations/${id}`, updates).catch((err) => {
-      if (err?.response?.status === 404) return;
-      console.error("Failed to update chat:", err?.message || err);
-      set({ chats: prevChats }, false, `${actionName}/rollback`);
-    });
-  },
-
-  // Renames conversation title
-  renameChat: (id, newTitle) => {
-    const title = newTitle?.trim();
-    if (title && id) get().updateChat(id, { title }, "conversation/renameChat");
-  },
-
-  // Toggles pinned state of conversation
-  pinChat: (id) => {
-    const chat = get().chats.find((c) => c.id === id);
-    if (chat && id) get().updateChat(id, { isPinned: !chat.isPinned }, "conversation/pinChat");
-  },
-
-  // Deletes conversation and selects next available chat
-  deleteChat: (id) => {
-    if (!id) return;
-    const prevChats = get().chats;
-    const remaining = prevChats.filter((c) => c.id !== id);
-    const nextActiveId = get().activeId === id ? remaining[0]?.id || null : get().activeId;
-
-    set({ chats: remaining, activeId: nextActiveId }, false, "conversation/deleteChat");
-
-    if (nextActiveId) {
-      get().fetchMessages(nextActiveId);
-      window.history.replaceState(null, "", `/c/${nextActiveId}`);
-    } else {
-      set({ messages: [] }, false, "conversation/deleteChat/clearMessages");
-      window.history.replaceState(null, "", "/");
-    }
-
-    if (!isMongoId(id)) return;
-    api.delete(`/chat/conversations/${id}`).catch((err) => {
-      if (err?.response?.status === 404) return;
-      console.error("Failed to delete chat:", err?.message || err);
-      set({ chats: prevChats }, false, "conversation/deleteChat/rollback");
-    });
-  },
-});
+      return { prevChats };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prevChats) queryClient.setQueryData(chatKeys.all, ctx.prevChats);
+    },
+    onSettled: (_data, _err, id) => {
+      queryClient.removeQueries({ queryKey: ["messages", id] });
+    },
+  });
+}

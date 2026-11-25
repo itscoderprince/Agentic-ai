@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useChatStore } from "@/store/useChatStore";
+import { useMessages } from "@/store/slices/messageSlice";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Message, MessageContent } from "@/components/ui/message";
 import { Spinner } from "@/components/ui/spinner";
@@ -7,9 +8,9 @@ import { BrainCircuit } from "lucide-react";
 import { AssistantMarkdown } from "@/components/assistant-markdown";
 
 export function ChatMessages() {
-  const messages = useChatStore((s) => s.messages);
-  const isMessagesLoading = useChatStore((s) => s.isMessagesLoading);
+  const activeId = useChatStore((s) => s.activeId);
   const isSending = useChatStore((s) => s.isSending);
+  const { data: messages = [], isLoading: isMessagesLoading } = useMessages(activeId);
 
   const bottomRef = useRef(null);
 

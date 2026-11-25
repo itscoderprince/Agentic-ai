@@ -11,16 +11,17 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useChatStore } from "@/store/useChatStore";
+import { useChats, useUpdateChat, useDeleteChat } from "@/store/slices/conversationSlice";
 import { BrainCircuit, Search, PlusCircle } from "lucide-react";
 
 export function AppSidebar({ ...props }) {
-  const chats = useChatStore((s) => s.chats);
+  const { data: chats = [] } = useChats();
+  const { mutate: updateChat } = useUpdateChat();
+  const { mutate: deleteChat } = useDeleteChat();
+
   const activeId = useChatStore((s) => s.activeId);
   const selectChat = useChatStore((s) => s.selectChat);
   const newChat = useChatStore((s) => s.newChat);
-  const pinChat = useChatStore((s) => s.pinChat);
-  const renameChat = useChatStore((s) => s.renameChat);
-  const deleteChat = useChatStore((s) => s.deleteChat);
   const setSearchOpen = useChatStore((s) => s.setSearchOpen);
 
   return (
@@ -52,7 +53,7 @@ export function AppSidebar({ ...props }) {
           <Button
             variant="secondary"
             className="w-full justify-center items-center gap-2 rounded-full h-10 px-4 cursor-pointer font-medium text-sm transition-all shadow-xs active:scale-[0.99]"
-            onClick={newChat}
+            onClick={() => newChat()}
           >
             <PlusCircle className="size-4.5" />
             <span>New chat</span>
@@ -65,8 +66,11 @@ export function AppSidebar({ ...props }) {
           chats={chats}
           activeId={activeId}
           onSelectChat={(chat) => selectChat(chat.id || chat._id)}
-          onPin={(chat) => pinChat(chat.id || chat._id)}
-          onRename={(chat, newTitle) => renameChat(chat.id || chat._id, newTitle)}
+          onPin={(chat) => updateChat({ id: chat.id || chat._id, updates: { isPinned: !chat.isPinned } })}
+          onRename={(chat, newTitle) => {
+            const clean = newTitle?.trim();
+            if (clean) updateChat({ id: chat.id || chat._id, updates: { title: clean } });
+          }}
           onDelete={(chat) => deleteChat(chat.id || chat._id)}
         />
       </SidebarContent>
